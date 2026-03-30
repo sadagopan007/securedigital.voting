@@ -12,55 +12,58 @@ app.secret_key = os.environ.get("SECRET_KEY", "securevote-fixed-key-2024-xk9z")
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"]   = False
 
-# ── SUPABASE CONNECTION ──────────────────────────────────────────────
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://lssucascactoghfnapgn.supabase.co")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxzc3VjYXNjYWN0b2doZm5hcGduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODQwMzIsImV4cCI6MjA5MDQ2MDAzMn0.3lAnNj_30ohWNOfeAxXWYz-QIHH1eEzO0Vp6Ft2pOro")
+# ── FIREBASE CONNECTION ──────────────────────────────────────────────
+FIREBASE_URL = os.environ.get("FIREBASE_URL")  # e.g. https://your-project-default-rtdb.firebaseio.com
+FIREBASE_KEY = os.environ.get("FIREBASE_KEY")  # Web API key from Firebase project settings
 
-HEADERS = {
-    "apikey":        SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type":  "application/json",
-}
-
-BASE = f"{SUPABASE_URL}/rest/v1"
-
-def sb_select(table, filters=None):
-    params = {"select": "*"}
-    if filters:
-        params.update(filters)
+def fb_get(path):
+    """Read data from Firebase Realtime Database."""
     try:
-        r = req.get(f"{BASE}/{table}", headers=HEADERS, params=params, timeout=10)
-        print(f"[sb_select] {table} → {r.status_code}: {r.text[:200]}")
+        url = f"{FIREBASE_URL}/{path}.json?auth={FIREBASE_KEY}"
+        r = req.get(url, timeout=10)
+        print(f"[fb_get] {path} → {r.status_code}")
         if r.ok:
             return r.json()
-        return []
+        return None
     except Exception as e:
-        print(f"[sb_select] {table} exception: {e}")
-        return []
+        print(f"[fb_get] {path} exception: {e}")
+        return None
 
-def sb_insert(table, data):
+def fb_set(path, data):
+    """Write/overwrite data at a Firebase path."""
     try:
-        h = {**HEADERS, "Prefer": "return=representation"}
-        r = req.post(f"{BASE}/{table}", headers=h, json=data, timeout=10)
-        print(f"[sb_insert] {table} → {r.status_code}: {r.text[:300]}")
+        url = f"{FIREBASE_URL}/{path}.json?auth={FIREBASE_KEY}"
+        r = req.put(url, json=data, timeout=10)
+        print(f"[fb_set] {path} → {r.status_code}")
         return r.ok
     except Exception as e:
-        print(f"[sb_insert] {table} exception: {e}")
+        print(f"[fb_set] {path} exception: {e}")
         return False
 
-def sb_delete(table, filters):
+def fb_push(path, data):
+    """Push a new item to a Firebase list (auto-ID)."""
     try:
-        h = {**HEADERS, "Prefer": "return=minimal"}
-        r = req.delete(f"{BASE}/{table}", headers=h, params=filters, timeout=10)
-        print(f"[sb_delete] {table} → {r.status_code}: {r.text[:200]}")
+        url = f"{FIREBASE_URL}/{path}.json?auth={FIREBASE_KEY}"
+        r = req.post(url, json=data, timeout=10)
+        print(f"[fb_push] {path} → {r.status_code}")
         return r.ok
     except Exception as e:
-        print(f"[sb_delete] {table} exception: {e}")
+        print(f"[fb_push] {path} exception: {e}")
         return False
 
-print("✅ Supabase REST client ready!")
-print(f"   URL: {SUPABASE_URL}")
-print(f"   KEY: {SUPABASE_KEY[:30]}...")
+def fb_delete(path):
+    """Delete data at a Firebase path."""
+    try:
+        url = f"{FIREBASE_URL}/{path}.json?auth={FIREBASE_KEY}"
+        r = req.delete(url, timeout=10)
+        print(f"[fb_delete] {path} → {r.status_code}")
+        return r.ok
+    except Exception as e:
+        print(f"[fb_delete] {path} exception: {e}")
+        return False
+
+print("✅ Firebase REST client ready!")
+print(f"   URL: {FIREBASE_URL}")
 
 # ── LOAD VOTER DATABASE FROM CSV ─────────────────────────────────────
 def load_voters():
@@ -88,39 +91,44 @@ CANDIDATES = [
     {"id": "C", "name": "Chetan Rao",   "party": "People's Party",       "symbol": "🌿"},
 ]
 
-# ── SUPABASE HELPERS ─────────────────────────────────────────────────
+# ── FIREBASE HELPERS ─────────────────────────────────────────────────
 def db_get_votes():
-    rows = sb_select("votes")
-    return {r["voter_id"]: {"candidate": r["candidate"],
-                             "timestamp": r["timestamp"],
-                             "hash":      r["hash"]} for r in rows}
+    data = fb_get("votes")
+    if not data:
+        return {}
+    return data  # { voter_id: { candidate, timestamp, hash } }
 
 def db_voter_voted(voter_id):
-    rows = sb_select("votes", {"voter_id": f"eq.{voter_id}", "select": "voter_id"})
-    return len(rows) > 0
+    result = fb_get(f"votes/{voter_id}")
+    return result is not None
 
 def db_cast_vote(voter_id, candidate, timestamp, vote_hash):
-    return sb_insert("votes", {
-        "voter_id":  voter_id,
+    return fb_set(f"votes/{voter_id}", {
         "candidate": candidate,
         "timestamp": str(timestamp),
         "hash":      vote_hash
     })
 
 def db_log_fraud(fraud_type, voter_id):
-    sb_insert("fraud_log", {
+    fb_push("fraud_log", {
         "type":     fraud_type,
         "voter_id": voter_id,
         "time":     str(time.time())
     })
 
 def db_get_fraud_log():
-    return sb_select("fraud_log", {"order": "time.desc", "limit": "10"})
+    data = fb_get("fraud_log")
+    if not data:
+        return []
+    # Firebase returns a dict with auto-IDs; convert to list, newest first
+    items = list(data.values())
+    items.sort(key=lambda x: float(x.get("time", 0)), reverse=True)
+    return items[:10]
 
 def db_reset():
-    sb_delete("votes",     {"voter_id": "neq.NONE"})
-    sb_delete("fraud_log", {"id": "gt.0"})
-    print("✅ Supabase data cleared!")
+    fb_delete("votes")
+    fb_delete("fraud_log")
+    print("✅ Firebase data cleared!")
 
 # ── HELPERS ───────────────────────────────────────────────────────────
 def generate_vote_hash(voter_id, candidate, timestamp):
@@ -134,7 +142,9 @@ def get_results():
     votes = db_get_votes()
     counts = {c["id"]: 0 for c in CANDIDATES}
     for v in votes.values():
-        counts[v["candidate"]] += 1
+        cid = v.get("candidate")
+        if cid in counts:
+            counts[cid] += 1
     return counts
 
 # ── ROUTES ────────────────────────────────────────────────────────────
