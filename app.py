@@ -4,7 +4,7 @@ import hashlib
 import time
 import os
 import csv
-import requests
+import requests as req
 
 app = Flask(__name__)
 
@@ -20,34 +20,41 @@ HEADERS = {
     "apikey":        SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
     "Content-Type":  "application/json",
-    "Prefer":        "return=minimal"
 }
 
-def sb_get(table, params=None):
-    """GET rows from a Supabase table"""
+BASE = f"{SUPABASE_URL}/rest/v1"
+
+def sb_select(table, filters=None):
+    params = {"select": "*"}
+    if filters:
+        params.update(filters)
     try:
-        r = requests.get(f"{SUPABASE_URL}/rest/v1/{table}",
-                         headers=HEADERS, params=params, timeout=10)
-        return r.json() if r.ok else []
+        r = req.get(f"{BASE}/{table}", headers=HEADERS, params=params, timeout=10)
+        if r.ok:
+            return r.json()
+        print(f"❌ sb_select({table}) HTTP {r.status_code}: {r.text}")
+        return []
     except Exception as e:
-        print(f"❌ sb_get({table}) error: {e}")
+        print(f"❌ sb_select({table}) error: {e}")
         return []
 
 def sb_insert(table, data):
-    """INSERT a row into a Supabase table"""
     try:
-        r = requests.post(f"{SUPABASE_URL}/rest/v1/{table}",
-                          headers=HEADERS, json=data, timeout=10)
+        r = req.post(f"{BASE}/{table}", headers={**HEADERS, "Prefer": "return=minimal"},
+                     json=data, timeout=10)
+        if not r.ok:
+            print(f"❌ sb_insert({table}) HTTP {r.status_code}: {r.text}")
         return r.ok
     except Exception as e:
         print(f"❌ sb_insert({table}) error: {e}")
         return False
 
-def sb_delete(table, params=None):
-    """DELETE rows from a Supabase table"""
+def sb_delete(table, filters):
     try:
-        r = requests.delete(f"{SUPABASE_URL}/rest/v1/{table}",
-                            headers=HEADERS, params=params, timeout=10)
+        r = req.delete(f"{BASE}/{table}", headers={**HEADERS, "Prefer": "return=minimal"},
+                       params=filters, timeout=10)
+        if not r.ok:
+            print(f"❌ sb_delete({table}) HTTP {r.status_code}: {r.text}")
         return r.ok
     except Exception as e:
         print(f"❌ sb_delete({table}) error: {e}")
@@ -70,7 +77,6 @@ def load_voters():
 
 VOTER_DATABASE = load_voters()
 
-# ── IN-MEMORY STORAGE (OTP + login attempts stay in RAM — that's fine) ─
 otp_storage    = {}
 login_attempts = {}
 trust_score    = [100]
@@ -84,19 +90,16 @@ CANDIDATES = [
 
 # ── SUPABASE HELPERS ──────────────────────────────────────────────────
 def db_get_votes():
-    """Return all votes as a dict {voter_id: {candidate, timestamp, hash}}"""
-    rows = sb_get("votes", {"select": "*"})
+    rows = sb_select("votes")
     return {r["voter_id"]: {"candidate": r["candidate"],
                              "timestamp": r["timestamp"],
                              "hash":      r["hash"]} for r in rows}
 
 def db_voter_voted(voter_id):
-    """Check if a voter has already voted"""
-    rows = sb_get("votes", {"select": "voter_id", "voter_id": f"eq.{voter_id}"})
+    rows = sb_select("votes", {"voter_id": f"eq.{voter_id}", "select": "voter_id"})
     return len(rows) > 0
 
 def db_cast_vote(voter_id, candidate, timestamp, vote_hash):
-    """Insert a vote into Supabase"""
     return sb_insert("votes", {
         "voter_id":  voter_id,
         "candidate": candidate,
@@ -105,7 +108,6 @@ def db_cast_vote(voter_id, candidate, timestamp, vote_hash):
     })
 
 def db_log_fraud(fraud_type, voter_id):
-    """Insert a fraud event into Supabase"""
     sb_insert("fraud_log", {
         "type":     fraud_type,
         "voter_id": voter_id,
@@ -113,13 +115,11 @@ def db_log_fraud(fraud_type, voter_id):
     })
 
 def db_get_fraud_log():
-    """Return last 10 fraud events"""
-    return sb_get("fraud_log", {"select": "*", "order": "time.desc", "limit": "10"})
+    return sb_select("fraud_log", {"order": "time.desc", "limit": "10"})
 
 def db_reset():
-    """Delete all votes and fraud logs"""
-    sb_delete("votes",     {"voter_id": "neq."})
-    sb_delete("fraud_log", {"voter_id": "neq."})
+    sb_delete("votes",     {"voter_id": "neq.NONE"})
+    sb_delete("fraud_log", {"id": "gt.0"})
     print("✅ Supabase data cleared!")
 
 # ── HELPERS ───────────────────────────────────────────────────────────
