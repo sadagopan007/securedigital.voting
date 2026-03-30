@@ -4,7 +4,7 @@ import hashlib
 import time
 import os
 import csv
-from supabase import create_client, Client
+import requests
 
 app = Flask(__name__)
 
@@ -12,11 +12,48 @@ app.secret_key = os.environ.get("SECRET_KEY", "securevote-fixed-key-2024-xk9z")
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"]   = False
 
-# ── SUPABASE CONNECTION ───────────────────────────────────────────────
+# ── SUPABASE CONNECTION (using REST API directly — no SDK needed) ──────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://lssucascactoghfnapgn.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxzc3VjYXNjYWN0b2doZm5hcGduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODQwMzIsImV4cCI6MjA5MDQ2MDAzMn0.3lAnNj_30ohWNOfeAxXWYz-QIHH1eEzO0Vp6Ft2pOro")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-print("✅ Connected to Supabase!")
+
+HEADERS = {
+    "apikey":        SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type":  "application/json",
+    "Prefer":        "return=minimal"
+}
+
+def sb_get(table, params=None):
+    """GET rows from a Supabase table"""
+    try:
+        r = requests.get(f"{SUPABASE_URL}/rest/v1/{table}",
+                         headers=HEADERS, params=params, timeout=10)
+        return r.json() if r.ok else []
+    except Exception as e:
+        print(f"❌ sb_get({table}) error: {e}")
+        return []
+
+def sb_insert(table, data):
+    """INSERT a row into a Supabase table"""
+    try:
+        r = requests.post(f"{SUPABASE_URL}/rest/v1/{table}",
+                          headers=HEADERS, json=data, timeout=10)
+        return r.ok
+    except Exception as e:
+        print(f"❌ sb_insert({table}) error: {e}")
+        return False
+
+def sb_delete(table, params=None):
+    """DELETE rows from a Supabase table"""
+    try:
+        r = requests.delete(f"{SUPABASE_URL}/rest/v1/{table}",
+                            headers=HEADERS, params=params, timeout=10)
+        return r.ok
+    except Exception as e:
+        print(f"❌ sb_delete({table}) error: {e}")
+        return False
+
+print("✅ Supabase REST client ready!")
 
 # ── LOAD VOTER DATABASE FROM CSV ──────────────────────────────────────
 def load_voters():
@@ -48,66 +85,42 @@ CANDIDATES = [
 # ── SUPABASE HELPERS ──────────────────────────────────────────────────
 def db_get_votes():
     """Return all votes as a dict {voter_id: {candidate, timestamp, hash}}"""
-    try:
-        res = supabase.table("votes").select("*").execute()
-        return {r["voter_id"]: {"candidate": r["candidate"],
-                                "timestamp": r["timestamp"],
-                                "hash":      r["hash"]} for r in res.data}
-    except Exception as e:
-        print(f"❌ db_get_votes error: {e}")
-        return {}
+    rows = sb_get("votes", {"select": "*"})
+    return {r["voter_id"]: {"candidate": r["candidate"],
+                             "timestamp": r["timestamp"],
+                             "hash":      r["hash"]} for r in rows}
 
 def db_voter_voted(voter_id):
     """Check if a voter has already voted"""
-    try:
-        res = supabase.table("votes").select("voter_id").eq("voter_id", voter_id).execute()
-        return len(res.data) > 0
-    except Exception as e:
-        print(f"❌ db_voter_voted error: {e}")
-        return False
+    rows = sb_get("votes", {"select": "voter_id", "voter_id": f"eq.{voter_id}"})
+    return len(rows) > 0
 
 def db_cast_vote(voter_id, candidate, timestamp, vote_hash):
     """Insert a vote into Supabase"""
-    try:
-        supabase.table("votes").insert({
-            "voter_id":  voter_id,
-            "candidate": candidate,
-            "timestamp": timestamp,
-            "hash":      vote_hash
-        }).execute()
-        return True
-    except Exception as e:
-        print(f"❌ db_cast_vote error: {e}")
-        return False
+    return sb_insert("votes", {
+        "voter_id":  voter_id,
+        "candidate": candidate,
+        "timestamp": timestamp,
+        "hash":      vote_hash
+    })
 
 def db_log_fraud(fraud_type, voter_id):
     """Insert a fraud event into Supabase"""
-    try:
-        supabase.table("fraud_log").insert({
-            "type":     fraud_type,
-            "voter_id": voter_id,
-            "time":     time.time()
-        }).execute()
-    except Exception as e:
-        print(f"❌ db_log_fraud error: {e}")
+    sb_insert("fraud_log", {
+        "type":     fraud_type,
+        "voter_id": voter_id,
+        "time":     time.time()
+    })
 
 def db_get_fraud_log():
     """Return last 10 fraud events"""
-    try:
-        res = supabase.table("fraud_log").select("*").order("time", desc=True).limit(10).execute()
-        return res.data
-    except Exception as e:
-        print(f"❌ db_get_fraud_log error: {e}")
-        return []
+    return sb_get("fraud_log", {"select": "*", "order": "time.desc", "limit": "10"})
 
 def db_reset():
     """Delete all votes and fraud logs"""
-    try:
-        supabase.table("votes").delete().neq("voter_id", "").execute()
-        supabase.table("fraud_log").delete().neq("voter_id", "").execute()
-        print("✅ Supabase data cleared!")
-    except Exception as e:
-        print(f"❌ db_reset error: {e}")
+    sb_delete("votes",     {"voter_id": "neq."})
+    sb_delete("fraud_log", {"voter_id": "neq."})
+    print("✅ Supabase data cleared!")
 
 # ── HELPERS ───────────────────────────────────────────────────────────
 def generate_vote_hash(voter_id, candidate, timestamp):
