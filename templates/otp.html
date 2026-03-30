@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Verify OTP · SecureVote{% endblock %}
+
+{% block extra_head %}
+<style>
+  .otp-input {
+    font-size: 2rem !important;
+    font-family: 'Syne', sans-serif !important;
+    font-weight: 700 !important;
+    letter-spacing: .3em !important;
+    text-align: center !important;
+  }
+  .demo-box {
+    background: #fffbf0;
+    border: 1.5px dashed var(--gold);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+  .demo-otp {
+    font-family: 'Syne', sans-serif;
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: .2em;
+    color: var(--ink);
+  }
+  .timer { color: var(--mid); font-size: .85rem; margin-top: .5rem; }
+  #countdown { font-weight: 700; color: var(--accent); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+  <div class="card">
+    <div class="steps">
+      <div class="step done"></div>
+      <div class="step active"></div>
+      <div class="step"></div>
+      <div class="step"></div>
+    </div>
+
+    <h1>OTP<br>Verification</h1>
+    <p class="subtitle">Enter the 6-digit OTP sent to your registered mobile number linked to <strong>{{ voter_id }}</strong>.</p>
+
+    {% if otp_demo %}
+    <div class="demo-box">
+      <div style="font-size:.75rem;font-weight:600;letter-spacing:.08em;color:var(--gold);text-transform:uppercase;margin-bottom:.4rem">📱 Demo OTP (visible for testing)</div>
+      <div class="demo-otp">{{ otp_demo }}</div>
+      <div class="timer">Expires in <span id="countdown">5:00</span></div>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert alert-error">⚠ {{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/verify_otp">
+      <input type="hidden" name="voter_id" value="{{ voter_id }}"/>
+      <div class="field">
+        <label class="label" for="otp">Enter OTP</label>
+        <input class="otp-input" type="number" id="otp" name="otp"
+               placeholder="000000" maxlength="6"
+               min="100000" max="999999" required autocomplete="off"/>
+      </div>
+      <button class="btn btn-primary" type="submit">Verify & Continue →</button>
+    </form>
+
+    <hr class="divider"/>
+    <a href="/login" class="btn btn-outline">← Back to Login</a>
+  </div>
+</div>
+
+<script>
+  let seconds = 300;
+  const el = document.getElementById("countdown");
+  if (el) {
+    const t = setInterval(() => {
+      seconds--;
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      el.textContent = m + ":" + String(s).padStart(2,"0");
+      if (seconds <= 60) el.style.color = "var(--danger)";
+      if (seconds <= 0) { clearInterval(t); el.textContent = "Expired"; }
+    }, 1000);
+  }
+</script>
+{% endblock %}

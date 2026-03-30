@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Vote Confirmed · SecureVote{% endblock %}
+
+{% block extra_head %}
+<style>
+  .success-icon {
+    width: 72px; height: 72px; border-radius: 50%;
+    background: #f0fff6; border: 2.5px solid var(--success);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2rem; margin: 0 auto 1.5rem;
+    animation: pop .4s cubic-bezier(.2,1.5,.5,1);
+  }
+  @keyframes pop { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
+
+  .hash-box {
+    background: var(--paper); border: 1.5px solid var(--border);
+    border-radius: 10px; padding: 1rem 1.2rem;
+    font-family: 'Syne', sans-serif; font-size: 1.3rem; font-weight: 700;
+    letter-spacing: .1em; text-align: center; color: var(--accent);
+    margin: 1rem 0; word-break: break-all;
+  }
+  .info-row {
+    display: flex; justify-content: space-between;
+    font-size: .88rem; padding: .6rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-key { color: var(--mid); font-weight: 500; }
+  .info-val { font-weight: 600; }
+
+  /* Countdown ring */
+  .countdown-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    margin: 1.5rem 0 1rem;
+  }
+  .countdown-circle {
+    width: 64px; height: 64px; position: relative;
+  }
+  .countdown-circle svg { transform: rotate(-90deg); }
+  .countdown-circle circle {
+    fill: none; stroke: var(--border); stroke-width: 4;
+  }
+  .countdown-circle .progress {
+    stroke: var(--accent); stroke-width: 4;
+    stroke-dasharray: 163;
+    stroke-dashoffset: 0;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear;
+  }
+  .countdown-num {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.3rem;
+    color: var(--accent);
+  }
+  .countdown-label { font-size: .8rem; color: var(--mid); margin-top: .4rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+  <div class="card" style="max-width:520px;text-align:center">
+    <div class="steps" style="justify-content:center">
+      <div class="step done"></div>
+      <div class="step done"></div>
+      <div class="step done"></div>
+      <div class="step done"></div>
+    </div>
+
+    <div class="success-icon">✅</div>
+    <h1>Vote<br>Confirmed!</h1>
+    <p class="subtitle">Your vote has been securely recorded. Thank you for participating in democracy.</p>
+
+    {% if candidate %}
+    <div style="background:#f0fff6;border:1.5px solid #b3eecb;border-radius:12px;padding:1.2rem;margin-bottom:1.5rem">
+      <div style="font-size:2.5rem;margin-bottom:.5rem">{{ candidate.symbol }}</div>
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem">{{ candidate.name }}</div>
+      <div style="color:var(--mid);font-size:.85rem">{{ candidate.party }}</div>
+    </div>
+    {% endif %}
+
+    <div style="text-align:left">
+      <div class="label">Blockchain Verification Hash</div>
+      <div class="hash-box">{{ vote_hash }}</div>
+      <p style="font-size:.8rem;color:var(--mid);text-align:center;margin-bottom:1rem">
+        Save this hash to verify your vote later
+      </p>
+
+      <div style="border:1.5px solid var(--border);border-radius:10px;padding:.5rem 1rem;margin-bottom:1.2rem">
+        <div class="info-row">
+          <span class="info-key">Status</span>
+          <span class="info-val" style="color:var(--success)">✔ Recorded</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Encrypted</span>
+          <span class="info-val">SHA-256</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Immutable</span>
+          <span class="info-val">Yes</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Fraud Check</span>
+          <span class="info-val" style="color:var(--success)">✔ Passed</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Countdown to redirect -->
+    <div class="countdown-wrap">
+      <div class="countdown-circle">
+        <svg viewBox="0 0 56 56" width="64" height="64">
+          <circle cx="28" cy="28" r="26"/>
+          <circle class="progress" id="progressRing" cx="28" cy="28" r="26"/>
+        </svg>
+        <div class="countdown-num" id="countNum">5</div>
+      </div>
+      <div class="countdown-label">Redirecting to login in <span id="countLabel">5</span>s</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let seconds = 5;
+  const total = 163; // circumference
+  const ring  = document.getElementById("progressRing");
+  const num   = document.getElementById("countNum");
+  const label = document.getElementById("countLabel");
+
+  ring.style.strokeDashoffset = 0;
+
+  const timer = setInterval(() => {
+    seconds--;
+    num.textContent   = seconds;
+    label.textContent = seconds;
+    ring.style.strokeDashoffset = total - (seconds / 5) * total;
+
+    if (seconds <= 0) {
+      clearInterval(timer);
+      window.location.href = "/login";
+    }
+  }, 1000);
+</script>
+{% endblock %}

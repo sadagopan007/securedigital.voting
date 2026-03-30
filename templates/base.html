@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}SecureVote{% endblock %}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --ink:    #0a0a0f;
+      --paper:  #f5f3ee;
+      --accent: #1a3cff;
+      --gold:   #e8a020;
+      --danger: #d42b2b;
+      --success:#1a8a4a;
+      --mid:    #7a7a8a;
+      --card:   #ffffff;
+      --border: #dddbd5;
+      --saffron:#FF9933;
+      --white:  #FFFFFF;
+      --green:  #138808;
+      --navy:   #000080;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+      min-height: 100vh;
+      background-image:
+        radial-gradient(circle at 15% 10%, rgba(26,60,255,.06) 0%, transparent 55%),
+        radial-gradient(circle at 85% 85%, rgba(232,160,32,.08) 0%, transparent 55%);
+    }
+
+    /* ── INDIA FLAG STRIPE ── */
+    .flag-stripe {
+      height: 5px;
+      background: linear-gradient(to right,
+        var(--saffron) 0%, var(--saffron) 33.3%,
+        var(--white)   33.3%, var(--white)  66.6%,
+        var(--green)   66.6%, var(--green)  100%);
+    }
+
+    /* ── NAV ── */
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .9rem 2.5rem;
+      border-bottom: 1.5px solid var(--border);
+      background: rgba(245,243,238,.95);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-left { display: flex; align-items: center; gap: 1rem; }
+
+    /* Government Logo */
+    .gov-logo {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 1px;
+    }
+    .ashoka-wheel {
+      width: 38px; height: 38px;
+      border: 3px solid var(--navy);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+      background: white;
+    }
+    .ashoka-wheel::before {
+      content: '';
+      width: 6px; height: 6px;
+      background: var(--navy);
+      border-radius: 50%;
+      position: absolute;
+    }
+    .wheel-spokes {
+      position: absolute; width: 100%; height: 100%;
+    }
+    .spoke {
+      position: absolute; width: 1.5px; height: 48%;
+      background: var(--navy); left: calc(50% - .75px); top: 2%;
+      transform-origin: bottom center;
+    }
+    .gov-text {
+      font-size: .55rem; font-weight: 700; color: var(--navy);
+      letter-spacing: .04em; text-align: center; line-height: 1.2;
+    }
+
+    .nav-logo {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800; font-size: 1.2rem; letter-spacing: -.02em;
+      color: var(--ink);
+      display: flex; flex-direction: column;
+    }
+    .nav-logo span { color: var(--accent); }
+    .nav-logo small {
+      font-size: .6rem; font-weight: 500; color: var(--mid);
+      letter-spacing: .05em; font-family: 'DM Sans', sans-serif;
+    }
+    .nav-badge {
+      font-size: .7rem; font-weight: 600; letter-spacing: .08em;
+      background: var(--accent); color: #fff;
+      padding: .2rem .55rem; border-radius: 4px;
+    }
+
+    /* ── MAIN ── */
+    .page-wrap {
+      min-height: calc(100vh - 80px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 2.5rem 1rem;
+    }
+    .card {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 2.8rem 3rem;
+      width: 100%; max-width: 500px;
+      box-shadow: 0 4px 32px rgba(10,10,15,.06);
+    }
+
+    /* ── TYPOGRAPHY ── */
+    h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 2rem; letter-spacing: -.03em; line-height: 1.15; margin-bottom: .45rem; }
+    h2 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.4rem; letter-spacing: -.02em; margin-bottom: 1.5rem; }
+    .subtitle { color: var(--mid); font-size: .95rem; font-weight: 400; margin-bottom: 2rem; line-height: 1.6; }
+    .label { display: block; font-size: .8rem; font-weight: 600; letter-spacing: .07em; color: var(--mid); text-transform: uppercase; margin-bottom: .45rem; }
+
+    /* ── FORM ── */
+    .field { margin-bottom: 1.4rem; }
+    input[type=text], input[type=number], input[type=tel] {
+      width: 100%; padding: .85rem 1.1rem;
+      border: 1.5px solid var(--border); border-radius: 10px;
+      font-family: 'DM Sans', sans-serif; font-size: 1rem;
+      background: var(--paper); color: var(--ink);
+      transition: border-color .2s, box-shadow .2s; outline: none;
+    }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(26,60,255,.12); }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+      padding: .9rem 1.8rem; border-radius: 10px;
+      font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700;
+      cursor: pointer; border: none; transition: all .2s;
+      text-decoration: none; width: 100%;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #0f2ce0; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(26,60,255,.3); }
+    .btn-outline { background: transparent; color: var(--ink); border: 1.5px solid var(--border); }
+    .btn-outline:hover { border-color: var(--ink); background: var(--paper); }
+
+    /* ── ALERTS ── */
+    .alert { padding: .85rem 1.1rem; border-radius: 10px; font-size: .9rem; font-weight: 500; margin-bottom: 1.4rem; }
+    .alert-error   { background: #fff0f0; border: 1px solid #fcc; color: var(--danger); }
+    .alert-success { background: #f0fff6; border: 1px solid #b3eecb; color: var(--success); }
+    .alert-info    { background: #f0f4ff; border: 1px solid #c0ccff; color: var(--accent); }
+
+    .divider { border: none; border-top: 1.5px solid var(--border); margin: 1.8rem 0; }
+
+    .steps { display: flex; gap: .5rem; align-items: center; margin-bottom: 2rem; }
+    .step { width: 28px; height: 6px; border-radius: 3px; background: var(--border); }
+    .step.active { background: var(--accent); }
+    .step.done   { background: var(--success); }
+
+    footer {
+      text-align: center; padding: 1.2rem;
+      color: var(--mid); font-size: .78rem;
+      border-top: 1px solid var(--border);
+    }
+    footer strong { color: var(--ink); }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<div class="flag-stripe"></div>
+
+<nav>
+  <div class="nav-left">
+    <!-- Government of India Logo -->
+    <div class="gov-logo">
+      <div class="ashoka-wheel">
+        <div class="wheel-spokes">
+          {% for i in range(24) %}
+          <div class="spoke" style="transform: rotate({{ i * 15 }}deg)"></div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="gov-text">GOVT. OF<br>INDIA</div>
+    </div>
+
+    <div style="width:1px;height:40px;background:var(--border);margin:0 .5rem"></div>
+
+    <div class="nav-logo">
+      🗳 Secure<span>Vote</span>
+      <small>Election Commission of India</small>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:.75rem;align-items:center">
+    <span class="nav-badge">HACKATHON DEMO</span>
+    <a href="/admin" style="font-size:.85rem;color:var(--mid);text-decoration:none">Admin ↗</a>
+  </div>
+</nav>
+
+{% block content %}{% endblock %}
+
+<footer>
+  <strong>SecureVote</strong> · Election Commission of India ·
+  Blockchain-Inspired Voting System · Hackathon 2024
+</footer>
+</body>
+</html>

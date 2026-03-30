@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard · SecureVote{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  .dashboard { padding: 2rem 2.5rem; max-width: 1000px; margin: 0 auto; }
+  .page-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 2rem; letter-spacing: -.03em; margin-bottom: .3rem; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin: 1.8rem 0; }
+  .stat-card { background: var(--card); border: 1.5px solid var(--border); border-radius: 12px; padding: 1.3rem 1.5rem; }
+  .stat-val { font-family: 'Syne', sans-serif; font-size: 2.5rem; font-weight: 800; line-height: 1; margin-bottom: .3rem; }
+  .stat-label { font-size: .8rem; color: var(--mid); font-weight: 500; letter-spacing: .05em; text-transform: uppercase; }
+  .section-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; margin: 2rem 0 1rem; padding-bottom: .6rem; border-bottom: 1.5px solid var(--border); }
+  .cand-row { display: grid; grid-template-columns: 2.5rem 1fr 5rem 4rem; align-items: center; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid var(--border); }
+  .cand-row:last-child { border-bottom: none; }
+  .bar-wrap { background: var(--paper); border-radius: 6px; height: 10px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); border-radius: 6px; transition: width .8s cubic-bezier(.2,1,.3,1); }
+  .fraud-item { display: flex; justify-content: space-between; padding: .65rem .9rem; border-radius: 8px; background: #fff5f5; border: 1px solid #fcc; margin-bottom: .5rem; font-size: .85rem; }
+  .fraud-type { font-weight: 600; color: var(--danger); text-transform: uppercase; font-size: .75rem; }
+  .chart-wrap { background: var(--card); border: 1.5px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; }
+  .live-badge { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; font-weight: 600; color: var(--success); background: #f0fff6; border: 1px solid #b3eecb; padding: .25rem .7rem; border-radius: 20px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .locked-box { background: var(--paper); border: 2px dashed var(--border); border-radius: 12px; padding: 2.5rem; text-align: center; color: var(--mid); margin-bottom: 1.5rem; }
+  .ended-banner { background: #f0fff6; border: 2px solid var(--success); border-radius: 12px; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+  .end-voting-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .6rem;
+    padding: .85rem 1.8rem; border-radius: 10px;
+    font-family: 'Syne', sans-serif; font-size: .95rem; font-weight: 700;
+    cursor: pointer; border: 2px solid var(--danger);
+    background: transparent; color: var(--danger);
+    transition: all .2s;
+  }
+  .end-voting-btn:hover { background: var(--danger); color: white; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(212,43,43,.25); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+
+  <!-- HEADER -->
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-bottom:.5rem">
+    <div>
+      <div class="page-title">Admin Dashboard</div>
+      <p style="color:var(--mid);font-size:.9rem">Real-time election monitoring</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+      {% if voting_ended %}
+      <div style="display:inline-flex;align-items:center;gap:.4rem;font-size:.75rem;font-weight:600;color:var(--danger);background:#fff0f0;border:1px solid #fcc;padding:.25rem .7rem;border-radius:20px;">
+        🔒 VOTING ENDED
+      </div>
+      {% else %}
+      <div class="live-badge"><div class="dot"></div> LIVE</div>
+      <form method="POST" action="/end_voting"
+            onsubmit="return confirm('⚠ Are you sure you want to END voting?\nThis will stop all new votes and reveal results.\nThis cannot be undone!')">
+        <button class="end-voting-btn" type="submit">🔒 End Voting & Reveal Results</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- STATS — Always visible live -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-val">{{ total_votes }}</div>
+      <div class="stat-label">Total Votes Cast</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val"
+        style="color:{% if trust_score >= 80 %}var(--success){% elif trust_score >= 50 %}var(--gold){% else %}var(--danger){% endif %}">
+        {{ trust_score }}
+      </div>
+      <div class="stat-label">Trust Score / 100</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--danger)">{{ fraud_log|length }}</div>
+      <div class="stat-label">Fraud Alerts</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">{{ candidates|length }}</div>
+      <div class="stat-label">Candidates</div>
+    </div>
+  </div>
+
+  {% if voting_ended %}
+  <!-- RESULTS REVEALED -->
+  <div class="ended-banner">
+    <span style="font-size:1.5rem">✅</span>
+    <div>
+      <div style="font-family:'Syne',sans-serif;font-weight:700;color:var(--success)">
+        Voting Has Ended — Official Results
+      </div>
+      <div style="font-size:.85rem;color:var(--mid)">Results are now final and publicly visible</div>
+    </div>
+  </div>
+
+  <div class="section-title">📊 Final Results</div>
+  <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:1rem 1.5rem;margin-bottom:1.5rem">
+    {% for c in candidates %}
+    <div class="cand-row">
+      <span style="font-size:1.8rem">{{ c.symbol }}</span>
+      <div>
+        <div style="font-weight:600;font-size:.95rem">{{ c.name }}</div>
+        <div style="font-size:.78rem;color:var(--mid)">{{ c.party }}</div>
+        <div class="bar-wrap" style="margin-top:.4rem">
+          <div class="bar-fill" style="width:{{ c.pct }}%"></div>
+        </div>
+      </div>
+      <div style="text-align:right;font-family:'Syne',sans-serif;font-weight:700;font-size:1.2rem">{{ c.votes }}</div>
+      <div style="text-align:right;color:var(--mid);font-size:.9rem">{{ c.pct }}%</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="chart-wrap">
+    <canvas id="voteChart" height="200"></canvas>
+  </div>
+
+  {% else %}
+  <!-- RESULTS HIDDEN -->
+  <div class="section-title">📊 Results</div>
+  <div class="locked-box">
+    <div style="font-size:2.5rem;margin-bottom:.8rem">🔒</div>
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:1.1rem;color:var(--ink);margin-bottom:.5rem">
+      Results Hidden Until Voting Ends
+    </div>
+    <p style="font-size:.88rem;line-height:1.7">
+      Click <strong>"End Voting & Reveal Results"</strong> above<br>
+      to stop voting and display the final results.
+    </p>
+  </div>
+  {% endif %}
+
+  <!-- FRAUD LOG -->
+  <div class="section-title">🚨 Fraud Alert Log</div>
+  {% if fraud_log %}
+    {% for f in fraud_log %}
+    <div class="fraud-item">
+      <div>
+        <div class="fraud-type">{{ f.type.replace("_"," ") }}</div>
+        <div style="color:var(--ink)">Voter ID: {{ f.voter_id }}</div>
+      </div>
+      <div style="color:var(--mid);font-size:.78rem;text-align:right">
+        {{ (f.time|int)|string }}
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="alert alert-success">✅ No fraud detected — election integrity is maintained.</div>
+  {% endif %}
+
+  <!-- BLOCKCHAIN LEDGER — No candidate shown -->
+  <div class="section-title">🔗 Blockchain Ledger</div>
+  <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+      <thead>
+        <tr style="background:var(--paper);border-bottom:1.5px solid var(--border)">
+          <th style="padding:.8rem 1rem;text-align:left;font-weight:600;color:var(--mid);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em">Voter ID</th>
+          <th style="padding:.8rem 1rem;text-align:left;font-weight:600;color:var(--mid);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em">Verification Hash</th>
+          <th style="padding:.8rem 1rem;text-align:left;font-weight:600;color:var(--mid);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for vid, v in votes.items() %}
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:.75rem 1rem;font-weight:600">{{ vid }}</td>
+          <td style="padding:.75rem 1rem;font-family:monospace;color:var(--accent);font-size:.82rem">{{ v.hash }}</td>
+          <td style="padding:.75rem 1rem">
+            <span style="background:#f0fff6;color:var(--success);font-size:.75rem;font-weight:600;padding:.2rem .6rem;border-radius:20px;border:1px solid #b3eecb">
+              ✔ Recorded
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not votes %}
+        <tr>
+          <td colspan="3" style="padding:1.5rem;text-align:center;color:var(--mid)">
+            No votes recorded yet
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="height:2rem"></div>
+</div>
+
+<script>
+  {% if voting_ended %}
+  const ctx = document.getElementById("voteChart").getContext("2d");
+  new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: [{% for c in candidates %}"{{ c.symbol }} {{ c.name }}"{% if not loop.last %},{% endif %}{% endfor %}],
+      datasets: [{
+        label: "Votes",
+        data: [{% for c in candidates %}{{ c.votes }}{% if not loop.last %},{% endif %}{% endfor %}],
+        backgroundColor: ["rgba(26,60,255,.8)", "rgba(232,160,32,.8)", "rgba(26,138,74,.8)"],
+        borderRadius: 8, borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true, plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: "#eee" } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+  {% else %}
+  setTimeout(() => location.reload(), 10000);
+  {% endif %}
+</script>
+{% endblock %}

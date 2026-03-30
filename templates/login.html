@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Login · SecureVote{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+  <div class="card">
+    <div class="steps">
+      <div class="step active"></div>
+      <div class="step"></div>
+      <div class="step"></div>
+      <div class="step"></div>
+    </div>
+
+    <h1>Voter<br>Identity Check</h1>
+    <p class="subtitle">Enter your registered Voter ID and Aadhaar number to receive a one-time password.</p>
+
+    {% if voting_ended %}
+    <!-- VOTING ENDED — no button, just message -->
+    <div style="background:#fff0f0;border:2px solid var(--danger);border-radius:12px;padding:2rem;text-align:center;">
+      <div style="font-size:2.5rem;margin-bottom:.8rem">🔒</div>
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem;color:var(--danger);margin-bottom:.5rem">
+        Voting Has Ended
+      </div>
+      <div style="font-size:.88rem;color:var(--mid);line-height:1.7">
+        The election is now closed.<br>
+        No more votes are being accepted.
+      </div>
+    </div>
+
+    {% else %}
+    <!-- VOTING ACTIVE — show login form -->
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/send_otp">
+      <div class="field">
+        <label class="label" for="voter_id">Voter ID</label>
+        <input type="text" id="voter_id" name="voter_id"
+               placeholder="e.g. VOTER001"
+               maxlength="15" required autocomplete="off"/>
+      </div>
+      <div class="field">
+        <label class="label" for="aadhaar">Aadhaar Number (12 digits)</label>
+        <input type="tel" id="aadhaar" name="aadhaar"
+               placeholder="XXXX XXXX XXXX"
+               maxlength="12" pattern="\d{12}" required autocomplete="off"/>
+        <small style="color:var(--mid);font-size:.78rem;margin-top:.35rem;display:block">
+          🔒 Verified against voter database
+        </small>
+      </div>
+      <button class="btn btn-primary" type="submit">Send OTP →</button>
+    </form>
+
+    <hr class="divider"/>
+    <div style="font-size:.82rem;color:var(--mid);line-height:1.9">
+      <strong style="color:var(--ink)">Demo credentials:</strong><br>
+      VOTER001 → <code style="background:var(--paper);padding:.1rem .4rem;border-radius:4px">123456789012</code><br>
+      VOTER002 → <code style="background:var(--paper);padding:.1rem .4rem;border-radius:4px">234567890123</code><br>
+      VOTER003 → <code style="background:var(--paper);padding:.1rem .4rem;border-radius:4px">345678901234</code>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
