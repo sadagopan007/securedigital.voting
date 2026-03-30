@@ -12,7 +12,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "securevote-fixed-key-2024-xk9z")
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"]   = False
 
-# ── SUPABASE CONNECTION (using REST API directly — no SDK needed) ──────
+# ── SUPABASE CONNECTION ──────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://lssucascactoghfnapgn.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxzc3VjYXNjYWN0b2doZm5hcGduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODQwMzIsImV4cCI6MjA5MDQ2MDAzMn0.3lAnNj_30ohWNOfeAxXWYz-QIHH1eEzO0Vp6Ft2pOro")
 
@@ -30,39 +30,39 @@ def sb_select(table, filters=None):
         params.update(filters)
     try:
         r = req.get(f"{BASE}/{table}", headers=HEADERS, params=params, timeout=10)
+        print(f"[sb_select] {table} → {r.status_code}: {r.text[:200]}")
         if r.ok:
             return r.json()
-        print(f"❌ sb_select({table}) HTTP {r.status_code}: {r.text}")
         return []
     except Exception as e:
-        print(f"❌ sb_select({table}) error: {e}")
+        print(f"[sb_select] {table} exception: {e}")
         return []
 
 def sb_insert(table, data):
     try:
-        r = req.post(f"{BASE}/{table}", headers={**HEADERS, "Prefer": "return=minimal"},
-                     json=data, timeout=10)
-        if not r.ok:
-            print(f"❌ sb_insert({table}) HTTP {r.status_code}: {r.text}")
+        h = {**HEADERS, "Prefer": "return=representation"}
+        r = req.post(f"{BASE}/{table}", headers=h, json=data, timeout=10)
+        print(f"[sb_insert] {table} → {r.status_code}: {r.text[:300]}")
         return r.ok
     except Exception as e:
-        print(f"❌ sb_insert({table}) error: {e}")
+        print(f"[sb_insert] {table} exception: {e}")
         return False
 
 def sb_delete(table, filters):
     try:
-        r = req.delete(f"{BASE}/{table}", headers={**HEADERS, "Prefer": "return=minimal"},
-                       params=filters, timeout=10)
-        if not r.ok:
-            print(f"❌ sb_delete({table}) HTTP {r.status_code}: {r.text}")
+        h = {**HEADERS, "Prefer": "return=minimal"}
+        r = req.delete(f"{BASE}/{table}", headers=h, params=filters, timeout=10)
+        print(f"[sb_delete] {table} → {r.status_code}: {r.text[:200]}")
         return r.ok
     except Exception as e:
-        print(f"❌ sb_delete({table}) error: {e}")
+        print(f"[sb_delete] {table} exception: {e}")
         return False
 
 print("✅ Supabase REST client ready!")
+print(f"   URL: {SUPABASE_URL}")
+print(f"   KEY: {SUPABASE_KEY[:30]}...")
 
-# ── LOAD VOTER DATABASE FROM CSV ──────────────────────────────────────
+# ── LOAD VOTER DATABASE FROM CSV ─────────────────────────────────────
 def load_voters():
     voters = {}
     try:
@@ -88,7 +88,7 @@ CANDIDATES = [
     {"id": "C", "name": "Chetan Rao",   "party": "People's Party",       "symbol": "🌿"},
 ]
 
-# ── SUPABASE HELPERS ──────────────────────────────────────────────────
+# ── SUPABASE HELPERS ─────────────────────────────────────────────────
 def db_get_votes():
     rows = sb_select("votes")
     return {r["voter_id"]: {"candidate": r["candidate"],
@@ -103,7 +103,7 @@ def db_cast_vote(voter_id, candidate, timestamp, vote_hash):
     return sb_insert("votes", {
         "voter_id":  voter_id,
         "candidate": candidate,
-        "timestamp": timestamp,
+        "timestamp": str(timestamp),
         "hash":      vote_hash
     })
 
@@ -111,7 +111,7 @@ def db_log_fraud(fraud_type, voter_id):
     sb_insert("fraud_log", {
         "type":     fraud_type,
         "voter_id": voter_id,
-        "time":     time.time()
+        "time":     str(time.time())
     })
 
 def db_get_fraud_log():
@@ -264,9 +264,9 @@ def cast_vote():
 
     timestamp = time.time()
     vote_hash = generate_vote_hash(voter_id, candidate, timestamp)
-    success   = db_cast_vote(voter_id, candidate, timestamp, vote_hash)
+    ok        = db_cast_vote(voter_id, candidate, timestamp, vote_hash)
 
-    if not success:
+    if not ok:
         return render_template("vote.html", voter_id=voter_id, candidates=CANDIDATES,
                                error="Database error. Please try again.")
 
